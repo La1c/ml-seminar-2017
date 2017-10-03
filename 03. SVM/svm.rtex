@@ -1,0 +1,345 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage{cmap}                
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathtext}
+\usepackage[english,russian]{babel}
+\usepackage{commath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{indentfirst}
+\usepackage{geometry}
+\usepackage{tikz}
+\usepackage{spalign}
+\usepackage{tkz-euclide}
+\usepackage{soul}
+\usetkzobj{all}
+\usetikzlibrary{arrows,positioning}
+\usetikzlibrary{shapes,snakes}
+\usetikzlibrary{shapes.multipart}
+\usepackage{graphicx}
+\usepackage{epstopdf}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{tcolorbox}
+\captionsetup{justification=centering}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\argmax}{argmax}
+\providecommand{\TODO}{\fcolorbox{red}{red}{\large{TODO}}}
+\DeclareMathOperator{\upd}{upd}
+\DeclareMathOperator{\eol}{eol}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\providecommand{\err}[1]{$\mathcal{#1}$}
+\providecommand{\ev}[1]{$\mathbb{#1}$}
+\providecommand{\TODO}[1]{\fcolorbox{red}{red}{\large{FIXME}:#1}}
+\providecommand{\PRACTICE}{\fcolorbox{blue}{blue}{\large{PRACTICE}}}
+\usepackage{physics}
+\DeclareMathOperator{\sign}{sign}
+\makeatletter
+\newenvironment{sqcases}{%
+  \matrix@check\sqcases\env@sqcases
+}{%
+  \endarray\right.%
+}
+\def\env@sqcases{%
+  \let\@ifnextchar\new@ifnextchar
+  \left\lbrack
+  \def\arraystretch{1.2}%
+  \array{@{}l@{\quad}l@{}}%
+}
+\newenvironment{ecases}{%
+  \matrix@check\ecases\env@ecases
+}{%
+  \endarray\right.%
+}
+\def\env@ecases{%
+  \let\@ifnextchar\new@ifnextchar
+  \left.
+  \def\arraystretch{1.2}%
+  \array{@{}l@{\quad}l@{}}%
+}
+%% for inline R code: if the inline code is not correctly parsed, you will see a message
+\newcommand{\rinline}[1]{SOMETHING WRONG WITH knitr}
+
+%% begin.rcode setup, include=FALSE
+% library(knitr)
+% library(lattice)
+% library(latticeExtra)
+%% end.rcode
+
+\title{Метод опорных векторов}
+\begin{document}
+\maketitle
+
+\section{SVM}
+Будем рассматривать задачу классификации в рамках обучения с учителем.
+
+Имеется выборка $\left\{\left(X_1, y_1\right), \dots, \left(X_n, y_n\right)\right\}$, $X_i\in\mathbb{R}^p$, $y_i\in\left\{-1, 1\right\}$;
+задачей является построение классифицирующего правила $f:\mathbb{R}^p\rightarrow \left\{-1, 1\right\}$.
+
+\subsection{Hard-margin SVM}
+предположим, что присутсвует линейная разделимость, т.е. существует гиперплоскость (определяемая уравнением $x^\intercal \beta-\beta_0=0$ ($x,\beta\in\mathbb{R}^p; \beta_0\in\mathbb{R}$),
+такая, что точки, соответствующие разным классам лежат в различных полупространствах относительно гиперплоскости.
+
+Факт принадлежности наблюдений из разных классов разным полупространствам можно (возможно, изменив знаки $\beta, \beta_0$)
+описать уравнениями:
+\[
+\begin{sqcases}
+	X_i^\intercal \beta - \beta_0 < 0 & y_i=-1 \\
+	X_i^\intercal \beta - \beta_0 > 0 & y_i=1 \\
+\end{sqcases}
+\Leftrightarrow
+\left(X_i^\intercal \beta - \beta_0\right) y_i > 0
+\]
+В таком случае, классифицирующим правилом разумно принять
+\[
+g\left(x\right)=\sign{\left(X^\intercal \beta-\beta_0\right)}
+\]
+
+Ясно, что в случае линейно разделимых данных может существовать более одной гиперплоскости, разделяющей данные.
+Введём критерий оптимальности: максимальное расстояние между двумя гиперплоскостями, параллельных данной и 
+симметрично расположенных относительно неё, при котором между ними не находится ни одна из точек $X_i$.
+
+Легко видеть, что каждой из двух параллельных гиперплоскостей будет принадлежать некоторое количество
+точек из соответствующего класса (иначе, так как количество точек в выборке конечно, то растояние между
+гиперплоскостями можно увеличить, сместив гиперплоскость, которой не принадлежит ни одной точки);
+точки, которые принадлежат одной из гиперплоскостей --- будем называть опорными векторами.
+
+С точностью до нормировки вектора $\beta$ эта пара гиперплоскостей может быть описана парой уравнений:
+\[
+\begin{ecases}
+	x^\intercal \beta - \beta_0 = -1 \\
+	x^\intercal \beta - \beta_0 = 1 \\
+\end{ecases}
+\]
+а растояние между ними составит $\frac{2}{\norm{\beta}}$.
+
+Принадлежность точек обучающей выборки полупространствам описывается уравнениями
+\[
+\begin{sqcases}
+	X_i^\intercal \beta - \beta_0 \leq 1 & y_i=-1 \\
+	X_i^\intercal \beta - \beta_0 \geq 1 & y_i=1 \\
+\end{sqcases}
+\Leftrightarrow
+\left(X_i^\intercal \beta - \beta_0\right) y_i \geq 1
+\]
+
+Таким образом, в случае линейно разделимой выборки, задача выбора оптимальной гиперплоскости сводится к следующей
+задаче квадратичного программирования с линейными ограничениями:
+\begin{equation}
+\begin{cases}
+\frac{1}{2}\norm{\beta}^2_2\rightarrow \min\limits_{\beta, \beta_0} \\
+\left(X_i^\intercal \beta - \beta_0\right) y_i \geq 1, \forall i\\
+\end{cases}
+\label{eq:hard-primal}
+\end{equation}
+
+Пользуясь принципом Лагранжа, из \eqref{eq:hard-primal} получаем задачу:
+\begin{equation}
+\begin{cases}
+\inf\limits_{\beta,\beta_0} \frac{1}{2}\norm{\beta}_2^2-\sum\limits_{i=1}^n{\alpha_i\left(y_i\left(X_i^\intercal \beta - \beta_0\right) - 1\right)} \rightarrow \max\limits_{\alpha_1,\dots,\alpha_n} \\
+\alpha_i \geq 0, \forall i \\
+\end{cases}
+\label{eq:hard-dual}
+\end{equation}
+
+Так как все функции гладкие, то $\inf$ достигается в точке, в которой выполнены необходимые условия экстремума:
+\[
+\begin{ecases}
+\frac{\partial}{\partial \beta}: & \beta = \sum\limits_{i=1}^{n}\alpha_i y_i X_i \\
+\frac{\partial}{\partial \beta_0}: & 0=\sum\limits_{i=1}^{n}\alpha_i y_i \\
+\end{ecases}
+\]
+подставляя эти равенства в \ref{eq:hard-dual} получаем:
+\begin{equation}
+\begin{cases}
+\sum\limits_{i=1}^n \alpha_i -\frac{1}{2}\sum\limits_{i=1}^{n}\sum\limits_{k=1}^{n}\alpha_i\alpha_k y_i y_k X_i^\intercal X_k \rightarrow \max\limits_{\alpha_1,\dots,\alpha_n} \\
+\alpha_i \geq 0, \forall i \\
+\sum\limits_{i=1}^{n}\alpha_i y_i=0 \\
+\alpha_i \left(y_i\left(X_i^\intercal \beta - \beta_0\right)-1\right) = 0 \\
+\end{cases}
+\end{equation}
+
+Из условия регулярности ККТ:
+\begin{equation}
+\alpha_i \left(y_i\left(X_i^\intercal \beta - \beta_0\right)-1\right) = 0 \\
+\label{eq:hard-kkt}
+\end{equation}
+в оптимальной точке, т.е. либо $\alpha_i=0$, либо $X_i$ является опорным вектором (принадлежит одной из пары плоскостей, описаных выше).
+
+\subsection{Soft-margin SVM}
+Понятно, что требование линейной разделимости классов слишком сильное для реальной применимости SVM как метода классификации.
+
+Позволим для этого каждому из ограничений в задаче \eqref{eq:hard-primal} быть несколько ослабленным:
+\begin{equation}
+\begin{cases}
+\frac{1}{2}\norm{\beta}^2_2\rightarrow \min\limits_{\beta, \beta_0} \\
+\left(X_i^\intercal \beta - \beta_0\right) y_i \geq 1 - \xi_i, \forall i\\
+\sum\limits_{i=1}^{n}\xi_i \leq t \\
+\xi_i\geq 0\, \forall i \\
+\end{cases}
+\label{eq:soft-primal}
+\end{equation}
+($t$ --- параметр алгоритма; линейно-разделимый случай соответствует $t=0$).
+
+Далее, повторяя все рассуждения для линейно-разделимого случая, используем принцип Лагранжа:
+\begin{equation}
+\begin{cases}
+\inf\limits_{\beta,\beta_0,\xi_1,\dots,\xi_n} \frac{1}{2}\norm{\beta}_2^2+\lambda\sum\limits_{i=1}^{n}\xi_i-\sum\limits_{i=1}^n{\alpha_i\left(y_i\left(X_i^\intercal \beta - \beta_0\right) - \left(1-\xi_i\right)\right)}-\sum\limits_{i=1}^n\gamma_i\xi_i \rightarrow \max\limits_{\alpha_1,\dots,\alpha_n, \gamma_1,\dots,\gamma_n,\lambda} \\
+0 \leq \alpha_i \leq t, \forall i \\
+\gamma_i \geq 0, \forall i \\
+\lambda \geq 0 \\
+\end{cases}
+\label{eq:soft-dual}
+\end{equation}
+
+Опять же, ввиду гладкости, $\inf$ достигается в точке, в которой выполнены необходимые условия экстремума:
+\[
+\begin{ecases}
+\frac{\partial}{\partial \beta}: & \beta = \sum\limits_{i=1}^{n}\alpha_i y_i X_i \\
+\frac{\partial}{\partial \beta_0}: & 0=\sum\limits_{i=1}^{n}\alpha_i y_i \\
+\frac{\partial}{\partial \xi_i}: & \alpha_i=\lambda-\gamma_i \\
+\end{ecases}
+\]
+используя эти равенства в \eqref{eq:soft-dual}, получаем:
+\begin{equation}
+\begin{cases}
+\sum\limits_{i=1}^n\alpha_i-\frac{1}{2}\sum\limits_{i=1}^{n}\sum\limits_{k=1}^{n}\alpha_i\alpha_ky_iy_kX_i^\intercal X_k \rightarrow \max\limits_{\alpha_1,\dots,\alpha_n} \\
+0 \leq \alpha_i \leq t, \forall i \\
+\sum\limits_{i=1}^{n}\alpha_i y_i=0 \\
+\end{cases}
+\label{eq:soft-final}
+\end{equation}
+
+Из условия регулярности ККТ опять же следует классификация векторов на опорные, аутлаеры и не участвующие в построении правила предсказания точки.
+
+\subsubsection{SVM в R}
+\PRACTICE kernlab, e1071
+
+\subsection{Методы оптимизации}
+В зависимости от соотношения размерностей $n$ и $p$, может быть выгодно (с точки зрения вычислительных затрат) решать прямую \eqref{eq:soft-primal},
+или двойственную \ref{eq:soft-final} задачу.
+
+\TODO
+\begin{itemize}
+	\item GD/SGD для прямой задачи
+	\item Квадратичное программирование для двойственной задачи
+	\item Sequential minimal optimization
+	\item Sub-gradient descent
+\end{itemize}
+
+\subsection{SVM как частный случай Empirical Risk Minimization}
+\TODO
+
+\section{Расширения SVM}
+\subsection{Kernel trick}
+Описаный выше алгоритм может быть использован лишь в случае, когда данные относительно похожи на линейно-разделимые.
+
+Предположим, что существует некоторое отображение $\Phi:\mathbb{R}^p\rightarrow V$ где $V$ -- некоторое гильбертово пространство.
+
+Тогда, несложно заметить, что применяя SVM к образам исходных векторов, мы получаем задачу квадратичного программирования:
+\begin{equation*}
+\begin{cases}
+\sum\limits_{i=1}^n\alpha_i-\frac{1}{2}\sum\limits_{i=1}^{n}\sum\limits_{k=1}^{n}\alpha_i\alpha_ky_iy_k\left\langle\Phi\left(X_i\right),\Phi\left(X_k\right)\right\rangle_V \rightarrow \max\limits_{\alpha_1,\dots,\alpha_n} \\
+0 \leq \alpha_i \leq t, \forall i \\
+\sum\limits_{i=1}^{n}\alpha_i y_i=0 \\
+\end{cases}
+\end{equation*}
+и классифицирующая функция
+\[
+\begin{ecases}
+h\left(X\right)=\sign\left[ \sum\limits_{i=1}^{n}\alpha_i y_i \left\langle \Phi\left(X_i\right), \Phi\left(X\right)\right\rangle_V - \beta_0\right]
+\end{ecases}
+\]
+(правило классификации остаётся прежним --- $\sign\left(h\left(X\right)\right)$
+
+Можно заметить, что во всех выражениях результат применения $\Phi$ используется только для использования в скалярном произведении с
+результатом применения $\Phi$ к другому вектору из $\mathbb{R}^p$, что позволяет использовать произвольную симметричную положительно
+определённую функцию $k\left(u, v\right):\mathbb{R}^p\times\mathbb{R}^p\rightarrow \mathbb{R}$ (ядро) в качестве скалярного произведения
+в некотором векторном пространстве; в этом случае преобразование
+$\Phi$ может соответствовать отображению, состоящему из собственных функций $k$:
+\[
+\begin{ecases}
+k\left(u, v\right)=\sum\limits_{i=1}^\infty \theta_j \varphi_k\left(u\right) \varphi_k\left(v\right) \\
+\Phi\left(X\right)=\left[\varphi_1\left(X\right),\dots,\varphi_k\left(X\right),\dots,\right] \\
+\end{ecases}
+\]
+
+Данное соображение позволяет применять SVM к данным в достаточной степени линейно разделимым в некотором гильбертовом пространстве
+(в том числе --- бесконечномерном); в том числе --- без предъявления в явном виде отображения из исходного пространства в данное.
+
+Часто используемые ядра:
+\begin{itemize}
+	\item RBF: $k\left(u, v\right)=e^{-\beta\norm{u-v}_2^2}$
+	\item Полиномиальное (степеней $\leq d$: $k\left(u, v\right)=\left(\left\langle u, v\right\rangle + 1\right)^d$
+\end{itemize}
+
+\subsubsection{Kernel-trick в R}
+\PRACTICE kernlab, e1071
+
+\subsection{Изменение регуляризации}
+Существуют методы, сходные с методом опорных векторов, отличающиеся регуляризацией в формулировке задачи \eqref{eq:soft-primal}:
+\begin{itemize}
+	\item Использование $\ell_1$-нормы вектора $\beta$ для ``отбора'' признаков
+	\item Одновременной использование $\ell_1$ и $\ell_2$ нормы вектора $\beta$ с различными весами
+\end{itemize}
+\TODO
+
+\subsection{Multi-class SVM}
+В предъявленом построении SVM рассматривался лишь случай классификации с двумя классами.
+
+Для распространения идеи SVM на классификацию с большим количеством классов существует несколько подходов, в частности:
+\begin{itemize}
+	\item Классификация с использованием сравнений вида ``один со многими''
+	\item Классификация с использованием сравнений вида ``каждый с каждым''
+\end{itemize}
+
+\subsubsection{Сравнения ``один со многими''}
+Для классификации с $N$ классами строится $N$ классифицирующих правил $h_i\left(X\right)$; кодирующих принадлежность $i$-му классу за $1$, 
+а принадлежность любому другому классу за $-1$.
+
+В качестве результирующего решающего правила используется
+\[
+h\left(X\right)=\argmax\limits_i h_i\left(X\right)
+\]
+
+\subsubsection{Сравнения ``каждый с каждым''}
+Для классификации с $N$ классами строится $\frac{N\left(N-1\right)}{2}$ классифицирующих правил, производящих классификацию
+для каждой возможной пары классов.
+
+Обозначив за $N_i$ количество сравнений, в которых элемент $X$ был классифицирован как принадлежащий $i$-ому классу; в качестве
+классифицирующего правила предлагается использовать 
+\[
+h\left(X\right)=\argmax\limits_i N_i
+\]
+
+\subsubsection{Multiclass-SVM в R}
+\PRACTICE
+\begin{itemize}
+ \item one-against-one: kernlab
+ \item one-against-all: ???
+\end{itemize}
+
+\section{Выбор параметров}
+Ввиду наличия свободы выбора значения параметра регуляризации, ядра (или семейства ядер), необходимо
+предъявить процедуру сравнения построенных классификаторов. Так как в предлагаемой процедуре не используются
+никакие предположения о распределении $P(X, y)$, использование информационных критериев (BIC, AIC, \dots) для
+этих целей невозможно.
+
+Предлагается рассмотреть процедуры выбора параметров, основанные на (общей) идее кросс-валидации и специфичную
+для SVM оценку эмпирического риска на основе комбинаторной размерности.
+
+\subsection{Кросс-валидация}
+\TODO
+
+\subsection{Оценка через комбинаторную размерность}
+\TODO
+
+\end{document}
